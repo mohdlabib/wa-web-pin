@@ -1,0 +1,12 @@
+{
+  "name": "wa-web-pin",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Browser extension that locks WhatsApp Web behind a PIN.",
+  "scripts": {
+    "test": "node tests/e2e.js"
+  },
+  "devDependencies": {
+    "playwright": "^1.40.0"
+  }
+}

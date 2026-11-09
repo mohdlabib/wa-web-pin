@@ -1,0 +1,19 @@
+{
+  "manifest_version": 3,
+  "name": "WA Web PIN Lock",
+  "version": "1.0.0",
+  "description": "Locks WhatsApp Web behind a PIN.",
+  "permissions": ["storage"],
+  "background": { "service_worker": "background.js" },
+  "options_page": "options.html",
+  "action": { "default_title": "WA Web PIN Lock settings" },
+  "content_scripts": [
+    {
+      "matches": ["https://web.whatsapp.com/*"],
+      "js": ["pin.js", "content.js"],
+      "run_at": "document_start",
+      "all_frames": false
+    }
+  ],
+  "icons": { "16": "icons/16.png", "48": "icons/48.png", "128": "icons/128.png" }
+}
