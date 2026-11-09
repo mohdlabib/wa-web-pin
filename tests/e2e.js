@@ -61,12 +61,51 @@ const PIN = "12344321";
     await wa.keyboard.type("hi");
     assert.strictEqual(await wa.inputValue("#chat"), "hi", "page usable after unlock");
 
-    // Ctrl+Shift+L locks again and blocks input.
-    await wa.keyboard.press("Control+Shift+KeyL");
+    const isLocked = async () => {
+      const before = await keys();
+      await wa.keyboard.type("x");
+      return (await keys()) === before;
+    };
+    const unlock = async () => {
+      await wa.keyboard.press("Control+A");
+      await wa.keyboard.press("Backspace");
+      await wa.keyboard.type(PIN);
+      await wa.keyboard.press("Enter");
+      await wa.waitForTimeout(1500);
+      await wa.focus("#chat");
+    };
+    assert.strictEqual(await isLocked(), false, "stays unlocked (no idle lock by default)");
+
+    // Floating lock button (default spot: 20px from right, 90px from bottom of 1280x720).
+    await wa.mouse.click(1240, 610);
     await wa.waitForTimeout(300);
-    const before = await keys();
-    await wa.keyboard.type("x");
-    assert.strictEqual(await keys(), before, "input blocked after manual lock");
+    assert.ok(await isLocked(), "floating button locks");
+    await unlock();
+
+    // Dragging the button moves it (and does not lock); new position is saved.
+    await wa.mouse.move(1240, 610);
+    await wa.mouse.down();
+    await wa.mouse.move(900, 300, { steps: 5 });
+    await wa.mouse.up();
+    await wa.waitForTimeout(300);
+    assert.strictEqual(await isLocked(), false, "drag does not lock");
+    const { buttonPos } = await op.evaluate(() => chrome.storage.local.get("buttonPos"));
+    assert.ok(buttonPos && buttonPos.x < 0.9, "button position saved");
+    await wa.mouse.click(900, 300);
+    await wa.waitForTimeout(300);
+    assert.ok(await isLocked(), "button works at new position");
+    await unlock();
+
+    // Toolbar icon / extension command path (background -> content script).
+    await sw.evaluate(() => lockActiveTab());
+    await wa.waitForTimeout(300);
+    assert.ok(await isLocked(), "background lock message locks");
+    await unlock();
+
+    // Alt+Shift+L locks again and blocks input.
+    await wa.keyboard.press("Alt+Shift+KeyL");
+    await wa.waitForTimeout(300);
+    assert.ok(await isLocked(), "input blocked after shortcut lock");
 
     // Five wrong PINs trigger a cooldown.
     for (let i = 0; i < 5; i++) {

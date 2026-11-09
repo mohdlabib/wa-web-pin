@@ -1,7 +1,8 @@
 // PIN lock overlay for WhatsApp Web. Fails closed: the page stays covered
 // until the correct PIN is entered, including when no PIN is configured.
+// While unlocked, a draggable floating button and Alt+Shift+L lock it again.
 (() => {
-  const DEFAULT_IDLE_MINUTES = 5;
+  const DEFAULT_IDLE_MINUTES = 0; // 0 = no automatic idle lock
   const ACTIVITY_EVENTS = ["mousemove", "mousedown", "keydown", "wheel", "touchstart"];
   const KEY_EVENTS = ["keydown", "keypress", "keyup", "paste"];
   const BLOCKED_EVENTS = ["keydown", "keypress", "keyup", "paste", "drop", "wheel", "mousedown", "click"];
@@ -10,6 +11,7 @@
   let lastActivity = Date.now();
   let idleMinutes = DEFAULT_IDLE_MINUTES;
   let busy = false;
+  let showButton = true;
 
   const host = document.createElement("div");
   host.id = "wapin-lock-host";
@@ -33,15 +35,30 @@
         font-size: 22px; letter-spacing: 6px; text-align: center; outline: none;
       }
       input:focus { border-color: #00a884; }
-      button {
+      form button {
         width: 100%; padding: 11px; border: 0; border-radius: 8px; cursor: pointer;
         background: #00a884; color: #111b21; font-size: 15px; font-weight: 600;
       }
-      button:disabled { opacity: .5; cursor: default; }
+      form button:disabled { opacity: .5; cursor: default; }
       button[hidden] { display: none; }
       .settings { background: #2a3942; color: #e9edef; }
       .error { color: #f15c6d; min-height: 1.4em; }
+      .lock-btn {
+        position: fixed; z-index: 2147483646; width: 40px; height: 40px; padding: 0;
+        display: flex; align-items: center; justify-content: center;
+        border: 0; border-radius: 50%; cursor: grab; touch-action: none;
+        background: #00a884; color: #fff; opacity: .55;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, .35); transition: opacity .15s;
+      }
+      .lock-btn:hover, .lock-btn:focus-visible { opacity: 1; }
+      .lock-btn[hidden] { display: none; }
+      .lock-btn svg { width: 20px; height: 20px; pointer-events: none; }
     </style>
+    <button type="button" class="lock-btn" title="Lock WhatsApp (Alt+Shift+L) — drag to move" aria-label="Lock WhatsApp" hidden>
+      <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+        <path d="M12 2a5 5 0 0 0-5 5v3H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8a2 2 0 0 0-2-2h-1V7a5 5 0 0 0-5-5zm-3 8V7a3 3 0 1 1 6 0v3H9zm3 3.5a1.5 1.5 0 0 1 .8 2.77V18h-1.6v-1.73A1.5 1.5 0 0 1 12 13.5z"/>
+      </svg>
+    </button>
     <div class="overlay" part="overlay">
       <form autocomplete="off">
         <h1>WhatsApp Web is locked</h1>
@@ -56,7 +73,8 @@
   const overlay = root.querySelector(".overlay");
   const form = root.querySelector("form");
   const input = root.querySelector("input");
-  const button = root.querySelector("button");
+  const button = root.querySelector("form button");
+  const lockBtn = root.querySelector(".lock-btn");
   const hint = root.querySelector(".hint");
   const error = root.querySelector(".error");
   const settings = root.querySelector(".settings");
@@ -73,6 +91,7 @@
   function lock() {
     locked = true;
     overlay.hidden = false;
+    lockBtn.hidden = true;
     input.value = "";
     error.textContent = "";
     mount();
@@ -83,6 +102,8 @@
   function unlock() {
     locked = false;
     overlay.hidden = true;
+    lockBtn.hidden = !showButton;
+    placeLockBtn();
     input.value = "";
     lastActivity = Date.now();
   }
@@ -164,11 +185,12 @@
     window.addEventListener(type, () => { if (!locked) lastActivity = Date.now(); }, { capture: true, passive: true });
   }
 
-  // Manual lock: Ctrl+Shift+L.
+  // Manual lock shortcut handled in the page (the extension command in
+  // background.js covers the same key when the browser consumes it first).
   window.addEventListener(
     "keydown",
     (e) => {
-      if (!locked && e.ctrlKey && e.shiftKey && e.code === "KeyL") {
+      if (!locked && e.altKey && e.shiftKey && !e.ctrlKey && e.code === "KeyL") {
         e.preventDefault();
         e.stopImmediatePropagation();
         lock();
@@ -181,9 +203,64 @@
     if (!locked && idleMinutes > 0 && Date.now() - lastActivity > idleMinutes * 60000) lock();
   }, 5000);
 
+  chrome.runtime.onMessage.addListener((msg) => {
+    if (msg === "lock" && !locked) lock();
+  });
+
+  // Floating lock button: click to lock, drag to move (position is remembered).
+  let btnPos = null; // { x, y } as fractions of the viewport
+  let drag = null;
+
+  function placeLockBtn() {
+    const size = 40;
+    const x = btnPos ? btnPos.x * innerWidth : innerWidth - size - 20;
+    const y = btnPos ? btnPos.y * innerHeight : innerHeight - size - 90;
+    lockBtn.style.left = Math.min(Math.max(0, x), innerWidth - size) + "px";
+    lockBtn.style.top = Math.min(Math.max(0, y), innerHeight - size) + "px";
+  }
+
+  lockBtn.addEventListener("pointerdown", (e) => {
+    drag = { dx: e.clientX - lockBtn.offsetLeft, dy: e.clientY - lockBtn.offsetTop, sx: e.clientX, sy: e.clientY, moved: false };
+    lockBtn.setPointerCapture(e.pointerId);
+  });
+  lockBtn.addEventListener("pointermove", (e) => {
+    if (!drag) return;
+    if (Math.abs(e.clientX - drag.sx) + Math.abs(e.clientY - drag.sy) > 4) drag.moved = true;
+    if (!drag.moved) return;
+    btnPos = { x: (e.clientX - drag.dx) / innerWidth, y: (e.clientY - drag.dy) / innerHeight };
+    placeLockBtn();
+  });
+  lockBtn.addEventListener("pointerup", () => {
+    if (!drag) return;
+    const moved = drag.moved;
+    drag = null;
+    if (moved) chrome.storage.local.set({ buttonPos: btnPos });
+    else lock();
+  });
+  lockBtn.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      lock();
+    }
+  });
+  addEventListener("resize", placeLockBtn);
+
+  chrome.storage.local.get(["buttonPos", "showButton"]).then(({ buttonPos, showButton: show }) => {
+    btnPos = buttonPos || null;
+    showButton = show !== false;
+    if (!locked) {
+      lockBtn.hidden = !showButton;
+      placeLockBtn();
+    }
+  });
+
   chrome.storage.onChanged.addListener((changes, area) => {
     if (area !== "local") return;
     if (changes.idleMinutes) idleMinutes = changes.idleMinutes.newValue;
+    if (changes.showButton) {
+      showButton = changes.showButton.newValue !== false;
+      if (!locked) lockBtn.hidden = !showButton;
+    }
     if (changes.pin && locked) refreshState();
   });
 

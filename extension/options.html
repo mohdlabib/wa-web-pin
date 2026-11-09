@@ -15,6 +15,8 @@
     .status { min-height: 1.5em; margin-top: 10px; }
     .ok { color: #00a884; } .err { color: #f15c6d; }
     small { color: #8696a0; }
+    .check { display: flex; gap: 8px; align-items: center; }
+    .check input { width: auto; }
   </style>
 </head>
 <body>
@@ -39,15 +41,17 @@
 
     <form id="idle-form">
       <fieldset>
-        <legend>Auto-lock</legend>
-        <label for="idle">Lock after this many idle minutes <small>(0 = off)</small></label>
+        <legend>Lock options</legend>
+        <label class="check"><input id="show-button" type="checkbox" /> Show floating lock button on WhatsApp Web</label>
+        <label for="idle">Auto-lock after this many idle minutes <small>(0 = off, default)</small></label>
         <input id="idle" type="number" min="0" max="1440" step="1" required />
         <button type="submit">Save</button>
         <p class="status" id="idle-status" role="status"></p>
       </fieldset>
     </form>
 
-    <p><small>WhatsApp Web locks every time it loads. Press <b>Ctrl+Shift+L</b> to lock it manually.</small></p>
+    <p><small>WhatsApp Web locks when it opens. Lock it any time with the floating button, the toolbar icon, or <b>Alt+Shift+L</b>
+      (change the shortcut at <code>edge://extensions/shortcuts</code>). Drag the floating button to move it.</small></p>
   </main>
   <script src="pin.js"></script>
   <script src="options.js"></script>

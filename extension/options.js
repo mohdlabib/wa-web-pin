@@ -6,9 +6,10 @@ function show(el, text, ok) {
 }
 
 async function init() {
-  const { pin, idleMinutes } = await chrome.storage.local.get(["pin", "idleMinutes"]);
+  const { pin, idleMinutes, showButton } = await chrome.storage.local.get(["pin", "idleMinutes", "showButton"]);
   $("current-wrap").hidden = !pin;
-  $("idle").value = Number.isFinite(idleMinutes) ? idleMinutes : 5;
+  $("idle").value = Number.isFinite(idleMinutes) ? idleMinutes : 0;
+  $("show-button").checked = showButton !== false;
 }
 
 $("pin-form").addEventListener("submit", async (e) => {
@@ -33,7 +34,7 @@ $("idle-form").addEventListener("submit", async (e) => {
   if (!Number.isInteger(minutes) || minutes < 0 || minutes > 1440) {
     return show($("idle-status"), "Enter a whole number from 0 to 1440.", false);
   }
-  await chrome.storage.local.set({ idleMinutes: minutes });
+  await chrome.storage.local.set({ idleMinutes: minutes, showButton: $("show-button").checked });
   show($("idle-status"), "Saved.", true);
 });
 
